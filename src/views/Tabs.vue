@@ -4,12 +4,12 @@
             <ion-tabs>
                 <ion-router-outlet></ion-router-outlet>
                 <ion-tab-bar id="tabControl">
-                    <ion-tab-button tab="tab2" href="/tabs/tab2">
+                    <ion-tab-button tab="tab1" href="/tabs/tab1">
                         <ion-icon :icon="images" />
                         <ion-label>Recent Photos</ion-label>
                     </ion-tab-button>
 
-                    <ion-tab-button tab="tab3" href="/tabs/tab3">
+                    <ion-tab-button tab="tab2" href="/tabs/tab2">
                         <ion-icon :icon="fileTray" />
                         <ion-label>File Explorer</ion-label>
                     </ion-tab-button>
