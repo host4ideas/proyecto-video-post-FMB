@@ -22,6 +22,7 @@ import {
 import FolderItem from "./FolderItem.vue";
 
 export default {
+    name: "FolderContent",
     props: ["folderContent", "itemClicked", "deleteDocument", "startCopy"],
     components: {
         IonItemSliding,

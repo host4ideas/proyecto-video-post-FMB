@@ -125,7 +125,7 @@ import {
 import router from "@/router/index";
 
 export default {
-    name: "Tab1",
+    name: "FileExplorer",
     components: {
         // Variables
         FolderContent,
@@ -184,7 +184,7 @@ export default {
                 router.replace(newPath);
             } else {
                 // If there isn`t a prev folder, means the root folder
-                newPath = `/tabs/tab3/${this.ROOT_FOLDER}`;
+                newPath = `/tabs/tab2/${this.ROOT_FOLDER}`;
                 this.$router.replace(newPath);
             }
             newPath = null;
@@ -412,7 +412,10 @@ export default {
                         pathToOpen = entry.name;
                     }
                     const folder = encodeURIComponent(pathToOpen);
-                    this.$router.push(`/tabs/tab3/${folder}`);
+
+                    console.log(`/tabs/tab2/${folder}`);
+
+                    this.$router.push(`/tabs/tab2/${folder}`);
                 }
             }
         },
@@ -466,23 +469,21 @@ export default {
                 });
                 console.log("Default folder exists.");
             } catch (error) {
-                if (error.message === "Folder does not exist.") {
-                    const alert = await alertController.create({
-                        header: "Choose root folder",
-                        message: `No default folder found. Default folder will be created in: <i>${this.APP_DIRECTORY}/${this.ROOT_FOLDER}</i>.<br/>
-                                  If you want to modify your collections, you can do it in the built-in File Explorer or through your smartphone's preferred File Explorer app.`,
-                        buttons: [
-                            {
-                                text: "OK",
-                                role: "cancel",
-                            },
-                        ],
-                    });
-                    await alert.present();
-                    // Create default
-                    await this.mkdirHelper(`${this.ROOT_FOLDER}`);
-                    console.log(`Default folder created: ${this.ROOT_FOLDER}`);
-                }
+                const alert = await alertController.create({
+                    header: "Choose root folder",
+                    message: `No default folder found. Default folder will be created in: <i>${this.APP_DIRECTORY}/${this.ROOT_FOLDER}</i>.<br/>
+                                If you want to modify your collections, you can do it in the built-in File Explorer or through your smartphone's preferred File Explorer app.`,
+                    buttons: [
+                        {
+                            text: "OK",
+                            role: "cancel",
+                        },
+                    ],
+                });
+                await alert.present();
+                // Create default
+                await this.mkdirHelper(`${this.ROOT_FOLDER}`);
+                console.log(`Default folder created: ${this.ROOT_FOLDER}`);
             }
         },
     },

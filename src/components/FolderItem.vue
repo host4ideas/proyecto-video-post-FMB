@@ -72,12 +72,8 @@ import {
 } from "ionicons/icons";
 
 export default {
-    props: [
-        "item",
-        "itemClicked",
-        "deleteDocument",
-        "startCopy",
-    ],
+    name: "FolderItem",
+    props: ["item", "itemClicked", "deleteDocument", "startCopy"],
     components: {
         IonIcon,
         IonButton,
