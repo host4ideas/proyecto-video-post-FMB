@@ -3,8 +3,6 @@
         <ion-item-sliding v-for="(f, index) in folderContent" :key="index">
             <FolderItem
                 :item="f"
-                :collectionFolder="collectionFolder"
-                :changeCollectionFolder="this.changeCollectionFolder"
                 :itemClicked="this.itemClicked"
                 :deleteDocument="this.deleteDocument"
                 :startCopy="startCopy"
@@ -21,7 +19,6 @@ import {
     folderOutline,
     copyOutline,
 } from "ionicons/icons";
-import { Preferences } from "@capacitor/preferences";
 import FolderItem from "./FolderItem.vue";
 
 export default {
@@ -35,7 +32,6 @@ export default {
         return {
             // Variables
             ROOT_FOLDER: "my-photo-collections",
-            collectionFolder: "",
             // Ionic
             isPlatform,
             // Icons
@@ -43,30 +39,7 @@ export default {
             documentOutline,
             folderOutline,
             copyOutline,
-            USER_PREFERENCES: "settings",
         };
-    },
-    methods: {
-        changeCollectionFolder(entry) {
-            Preferences.set({
-                key: this.USER_PREFERENCES,
-                value: JSON.stringify({
-                    ...{
-                        myCollectionFolder: {
-                            name: entry.name,
-                            path: this.$route.fullPath + "/" + entry.name,
-                        },
-                    },
-                }),
-            }).then(() => {
-                Preferences.get({
-                    key: this.USER_PREFERENCES,
-                }).then((settingsList) => {
-                    const settingsParsed = JSON.parse(settingsList.value);
-                    this.collectionFolder = settingsParsed.myCollectionFolder;
-                });
-            });
-        },
     },
 };
 </script>

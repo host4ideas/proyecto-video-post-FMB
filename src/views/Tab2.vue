@@ -2,14 +2,14 @@
     <ion-page>
         <ion-header>
             <ion-toolbar>
-                <ion-title> My Collection </ion-title>
+                <ion-title>Last taken photos</ion-title>
             </ion-toolbar>
         </ion-header>
 
         <ion-content :fullscreen="true">
             <ion-header collapse="condense">
                 <ion-toolbar>
-                    <ion-title size="large">My Collections </ion-title>
+                    <ion-title size="large">Last taken photos</ion-title>
                 </ion-toolbar>
             </ion-header>
 
@@ -30,7 +30,7 @@
                 horizontal="center"
                 slot="fixed"
             >
-                <ion-fab-button @click="handlePhoto()">
+                <ion-fab-button @click="takePhoto()">
                     <ion-icon :icon="camera"></ion-icon>
                 </ion-fab-button>
             </ion-fab>
@@ -56,14 +56,8 @@ import {
     IonCol,
 } from "@ionic/vue";
 import { usePhotoGallery } from "@/composables/usePhotoGallery";
-import { defineProps, reactive, watchEffect } from "vue";
-import { useRouter } from "vue-router";
 
-const router = useRouter();
-
-const props = defineProps(["foldersToCompare"]);
-
-const { photos, takePhoto, deletePhoto, compareImages } = usePhotoGallery();
+const { photos, takePhoto, deletePhoto } = usePhotoGallery();
 
 async function showActionSheet(photo) {
     const actionSheet = await actionSheetController.create({

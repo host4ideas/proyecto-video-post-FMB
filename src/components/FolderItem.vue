@@ -9,18 +9,6 @@
             {{ item.name }}
         </ion-item>
 
-        <!-- Set My Collection folder -->
-        <ion-checkbox
-            v-if="item.name != ROOT_FOLDER && !item.isFile"
-            :checked="isChecked"
-            :disabled="isDisabled"
-            @click="changeCollectionFolder(item)"
-            slot="end"
-        ></ion-checkbox>
-        <ion-label v-if="item.name != ROOT_FOLDER && !item.isFile" slot="end"
-            >Collection Folder</ion-label
-        >
-
         <!-- The start/end option buttons for all operations -->
         <ion-item-options side="start">
             <ion-item-option @click="deleteDocument(item)" color="danger">
@@ -47,19 +35,6 @@
                 />
                 {{ item.name }}
             </ion-item>
-            <!-- Set My Collection folder -->
-            <ion-checkbox
-                v-if="item.name != ROOT_FOLDER && !item.isFile"
-                :checked="isChecked"
-                :disabled="isDisabled"
-                @click="changeCollectionFolder(item)"
-                slot="end"
-            ></ion-checkbox>
-            <ion-label
-                v-if="item.name != ROOT_FOLDER && !item.isFile"
-                slot="end"
-                >Collection Folder</ion-label
-            >
             <!-- Delete -->
             <ion-button slot="end" color="light" @click="deleteDocument(item)">
                 <ion-icon
@@ -87,9 +62,7 @@ import {
     isPlatform,
     IonItemOption,
     IonItemOptions,
-    IonCheckbox,
     IonItem,
-    IonLabel,
 } from "@ionic/vue";
 import {
     trashOutline,
@@ -97,13 +70,10 @@ import {
     folderOutline,
     copyOutline,
 } from "ionicons/icons";
-import { Preferences } from "@capacitor/preferences";
 
 export default {
     props: [
         "item",
-        "collectionFolder",
-        "changeCollectionFolder",
         "itemClicked",
         "deleteDocument",
         "startCopy",
@@ -113,9 +83,7 @@ export default {
         IonButton,
         IonItemOption,
         IonItemOptions,
-        IonCheckbox,
         IonItem,
-        IonLabel,
     },
     data() {
         return {
@@ -130,40 +98,7 @@ export default {
             documentOutline,
             folderOutline,
             copyOutline,
-            USER_PREFERENCES: "settings",
         };
-    },
-    watch: {
-        collectionFolder(newCheckedItem) {
-            if (newCheckedItem === this.item.name) {
-                this.isDisabled = true;
-                setTimeout(() => {
-                    this.isChecked = true;
-                }, 10);
-            } else {
-                this.isDisabled = false;
-                setTimeout(() => {
-                    this.isChecked = false;
-                }, 10);
-            }
-        },
-    },
-    mounted() {
-        Preferences.get({
-            key: this.USER_PREFERENCES,
-        }).then((settingsList) => {
-            const settingsParsed = JSON.parse(settingsList.value);
-            if (settingsParsed.myCollectionFolder) {
-                if (settingsParsed.myCollectionFolder.name === this.item.name) {
-                    this.isDisabled = true;
-                    this.isChecked = true;
-                } else {
-                    this.isDisabled = false;
-                }
-            } else {
-                console.log("No Collection Folder");
-            }
-        });
     },
 };
 </script>

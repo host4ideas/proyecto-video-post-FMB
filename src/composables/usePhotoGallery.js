@@ -1,41 +1,27 @@
-import { onMounted } from "vue";
+import { ref } from "vue";
 import { Camera, CameraSource, CameraResultType } from "@capacitor/camera";
+import { Capacitor } from "@capacitor/core";
 import { Filesystem, Directory } from "@capacitor/filesystem";
-import { Preferences } from "@capacitor/preferences";
 import { isPlatform, alertController, loadingController } from "@ionic/vue";
 
 export function usePhotoGallery() {
-    const photos = [];
-    const USER_PREFERENCES = "settings";
+    const photos = ref([]);
     const APP_DIRECTORY = Directory.Documents;
     const ROOT_FOLDER = "my-photo-collections";
 
     const loading = loadingController.create({});
 
-    const loadSaved = async (collectionFolder) => {
-        // console.log(encodeURIComponent(collectionFolder.name));
-        // const folderContent = await Filesystem.readdir({
-        //     directory: APP_DIRECTORY,
-        //     path: collectionFolder,
-        // });
-        // for (const file of folderContent) {
-        //     console.log(file);
-        // }
-    };
+    const controlLoadingScreen = async (option, message) => {
+        const loadingScreen = await loading;
+        loadingScreen.message = message;
 
-    const controlLoadingScreen = (option, message) => {
-        loading.then((loadingScreen) => {
-            loadingScreen.message = message;
-            if (option === "start") {
-                loadingScreen.present().then(() => {
-                    return true;
-                });
-            } else {
-                loadingScreen.dismiss().then(() => {
-                    return false;
-                });
-            }
-        });
+        if (option === "start") {
+            await loadingScreen.present();
+            return true;
+        } else {
+            await loadingScreen.dismiss();
+            return false;
+        }
     };
 
     const convertBlobToBase64 = (blob) =>
@@ -48,88 +34,134 @@ export function usePhotoGallery() {
             reader.readAsDataURL(blob);
         });
 
-    const checkCollectionFolder = async () => {
-        // Check if there is a user selected My Collection folder to display
-        let settings = await Preferences.get({ key: USER_PREFERENCES });
-        settings = JSON.parse(settings.value);
-
-        if (settings.myCollectionFolder == null) {
-            alertController
-                .create({
-                    header: "No Collection Folder selected.",
-                    message: "Please, check a collection folder to show here",
-                    buttons: [
-                        {
-                            text: "OK",
-                            role: "cancel",
-                        },
-                    ],
-                })
-                .then((alert) => {
-                    alert.present();
-                });
+    const savePicture = async (photo, fileName) => {
+        let base64Data;
+        // "hybrid" will detect Cordova or Capacitor;
+        if (isPlatform("hybrid")) {
+            const file = await Filesystem.readFile({
+                // eslint-disable-next-line
+                path: photo.path,
+            });
+            base64Data = file.data;
         } else {
-            loadSaved(settings.myCollectionFolder);
+            // Fetch the photo, read as a blob, then convert to base64 format
+            // eslint-disable-next-line
+            const response = await fetch(photo.webPath);
+            const blob = await response.blob();
+            base64Data = await convertBlobToBase64(blob);
+        }
+        const savedFile = await Filesystem.writeFile({
+            path: ROOT_FOLDER + "/" + fileName,
+            data: base64Data,
+            directory: APP_DIRECTORY,
+        });
+
+        if (isPlatform("hybrid")) {
+            // Display the new image by rewriting the 'file://' path to HTTP
+            // Details: https://ionicframework.com/docs/building/webview#file-protocol
+            return {
+                filepath: savedFile.uri,
+                webviewPath: Capacitor.convertFileSrc(savedFile.uri),
+            };
+        } else {
+            // Use webPath to display the new image instead of base64 since it's
+            // already loaded into memory
+            return {
+                filepath: fileName,
+                webviewPath: photo.webPath,
+            };
         }
     };
 
     const takePhoto = async () => {
         try {
-            const photo = await Camera.getPhoto({
-                resultType: CameraResultType.Uri,
-                source: CameraSource.Camera,
-                quality: 100,
-            });
+            controlLoadingScreen("start", "Loading camera");
 
-            let base64Data;
+            const permissions = await Camera.checkPermissions();
 
-            if (isPlatform("hybrid")) {
-                const file = await Filesystem.readFile({
-                    // eslint-disable-next-line
-                    path: photo.path,
+            if (
+                permissions.camera === "granted" &&
+                permissions.photos === "granted"
+            ) {
+                controlLoadingScreen("stop", "Loading camera");
+
+                const photo = await Camera.getPhoto({
+                    resultType: CameraResultType.Uri,
+                    source: CameraSource.Camera,
+                    quality: 100,
                 });
-                base64Data = file.data;
-            } else {
-                // Fetch the photo, read as a blob, then convert to base64 format
-                // eslint-disable-next-line
-                const response = await fetch(photo.webPath);
-                const blob = await response.blob();
-                base64Data = await convertBlobToBase64(blob);
+
+                let fileName = new Date().getTime();
+
+                const alert = await alertController.create({
+                    header: "File name",
+                    message: "Please specify the name of the new photo",
+                    inputs: [
+                        {
+                            name: "name",
+                            type: "text",
+                            placeholder: "new-photo-name",
+                        },
+                    ],
+                    buttons: [
+                        {
+                            text: "Cancel",
+                            role: "cancel",
+                        },
+                        {
+                            text: "Confirm",
+                            role: "confirm",
+                            handler: async (data) => {
+                                fileName = data.name;
+                            },
+                        },
+                        {
+                            text: "Default name",
+                            role: "default",
+                        },
+                    ],
+                });
+
+                await alert.present();
+
+                const { role } = await alert.onDidDismiss();
+
+                if (role !== "cancel") {
+                    fileName += ".jpeg";
+                    const savedFileImage = await savePicture(photo, fileName);
+                    photos.value = [savedFileImage, ...photos.value];
+                }
+
+                return;
             }
-
-            const img = document.createElement("img");
-            document.body.appendChild(img);
-            img.src = base64Data;
-            img.id = "img1";
-
-            // Delete data to save memory
-            base64Data = null;
-            return img;
-        } catch (e) {
-            console.info(e.message);
-            return null;
+            Camera.requestPermissions();
+        } catch (error) {
+            console.warn(error.message);
+        } finally {
+            controlLoadingScreen("stop", "Loading camera");
         }
     };
 
     const deletePhoto = async (photo) => {
-        // Remove this photo from the Photos reference data array
-        photos.value = photos.value.filter(
-            (p) => p.filepath !== photo.filepath
-        );
+        try {
+            // Remove this photo from the Photos reference data array
+            photos.value = photos.value.filter(
+                (p) => p.filepath !== photo.filepath
+            );
 
-        // delete photo file from filesystem
-        const filename = photo.filepath.substr(
-            photo.filepath.lastIndexOf("/") + 1
-        );
-        await Filesystem.deleteFile({
-            path: filename,
-            directory: APP_DIRECTORY,
-        });
+            // delete photo file from filesystem
+            const filename = photo.filepath.substr(
+                photo.filepath.lastIndexOf("/") + 1
+            );
+
+            await Filesystem.deleteFile({
+                path: ROOT_FOLDER + "/" + filename,
+                directory: APP_DIRECTORY,
+            });
+        } catch (error) {
+            console.warn(error.message);
+        }
     };
-
-    onMounted(() => {
-        checkCollectionFolder();
-    });
 
     return {
         photos,

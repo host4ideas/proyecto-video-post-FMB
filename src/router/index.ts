@@ -15,22 +15,10 @@ const routes: Array<RouteRecordRaw> = [
                 path: "",
                 redirect: "tab2",
             },
-            // {
-            //     path: "tab1",
-            //     name: "Tab1",
-            //     component: () => import("@/views/Tab1.vue"),
-            // },
             {
                 path: "tab2",
                 name: "Tab2",
                 component: () => import("@/views/Tab2.vue"),
-                props: ({ query }) => {
-                    if (query["folders"]) {
-                        return {
-                            foldersToCompare: query["folders"],
-                        };
-                    }
-                },
             },
             {
                 /* This will help us build the navigation inside our app by passing a folder name for the :folder parameter inside the path. */
@@ -38,21 +26,17 @@ const routes: Array<RouteRecordRaw> = [
                 name: "Tab3",
                 component: () => import("@/views/Tab3.vue"),
                 props: ({ params, query }) => {
-                    if (query.imageComparison) {
-                        return { folder: "", isImageComparison: true };
+                    let newPath;
+
+                    if (params.folder === "") {
+                        newPath = ["my-photo-collections"];
                     } else {
-                        let newPath;
-
-                        if (params.folder === "") {
-                            newPath = ["my-photo-collections"];
-                        } else {
-                            newPath = params.folder;
-                        }
-
-                        return {
-                            folder: String(newPath),
-                        };
+                        newPath = params.folder;
                     }
+
+                    return {
+                        folder: String(newPath),
+                    };
                 },
             },
         ],

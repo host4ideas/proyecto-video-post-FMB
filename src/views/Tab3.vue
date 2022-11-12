@@ -12,15 +12,13 @@
                 </ion-toolbar>
             </ion-header>
             <!-- Main content -->
-            <FileExplorer
-                :currentFolder="folder"
-                :isImageComparison="isImageComparison"
-            />
+            <FileExplorer :currentFolder="props.folder" />
         </ion-content>
     </ion-page>
 </template>
 
-<script>
+<script setup>
+import { defineProps } from "vue";
 import {
     IonPage,
     IonHeader,
@@ -30,19 +28,7 @@ import {
 } from "@ionic/vue";
 import FileExplorer from "@/components/FileExplorer.vue";
 
-export default {
-    name: "Tab3",
-    components: {
-        FileExplorer,
-        IonHeader,
-        IonToolbar,
-        IonTitle,
-        IonContent,
-        IonPage,
-    },
-    props: {
-        folder: String,
-        isImageComparison: Boolean,
-    },
-};
+const props = defineProps({
+    folder: String,
+});
 </script>

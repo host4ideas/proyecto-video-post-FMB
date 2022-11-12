@@ -3,10 +3,17 @@
         <ion-toolbar :color="copyFile ? 'secondary' : 'primary'">
             <ion-button
                 slot="start"
-                v-if="currentFolder != ''"
+                v-if="currentFolder != '' && currentFolder !== ROOT_FOLDER"
                 @click="handleBackButton()"
             >
                 <ion-icon :icon="arrowBackCircleOutline" />
+            </ion-button>
+            <ion-button
+                style="margin-right: 20px"
+                slot="end"
+                @click="loadDocuments()"
+            >
+                <ion-icon :icon="reloadOutline" />
             </ion-button>
             <ion-title> {{ currentFolder || "File Explorer" }} </ion-title>
         </ion-toolbar>
@@ -45,7 +52,6 @@
         :deleteDocument="this.deleteDocument"
         :startCopy="startCopy"
         :currentFolder="currentFolder"
-        @response="(msg) => (foldersToCompare = msg)"
     />
 
     <!-- Fab to add files & folders -->
@@ -114,6 +120,7 @@ import {
     arrowBackCircleOutline,
     fileTrayStackedOutline,
     closeOutline,
+    reloadOutline,
 } from "ionicons/icons";
 import router from "@/router/index";
 
@@ -146,10 +153,8 @@ export default {
             copyFile: null,
             filepicker: null,
             folderpicker: null,
-            foldersToCompare: [],
             APP_DIRECTORY: Directory.Documents,
             ROOT_FOLDER: "my-photo-collections",
-            USER_PREFERENCES: "settings",
             // Use Vue router
             router: router,
             // Icons
@@ -160,13 +165,10 @@ export default {
             checkmark,
             add,
             closeOutline,
+            reloadOutline,
         };
     },
     methods: {
-        handleScroll(e) {
-            e.preventDefault();
-            this.$refs.scroll.scrollTop += e.deltaY;
-        },
         handleBackButton() {
             /*
                 Due to history navigation between tabs is problematic.
@@ -181,15 +183,11 @@ export default {
                 newPath = encodeURIComponent(newPath);
                 router.replace(newPath);
             } else {
-                // If there is not a prev folder, means the root folder
+                // If there isn`t a prev folder, means the root folder
                 newPath = `/tabs/tab3/${this.ROOT_FOLDER}`;
                 this.$router.replace(newPath);
             }
             newPath = null;
-        },
-        getCurrentFolder() {
-            const folder = this.currentFolder.split("/");
-            return folder[folder.length - 1];
         },
         async loadDocuments() {
             try {
@@ -204,7 +202,6 @@ export default {
                     if (file.type === "directory") {
                         file = {
                             ...file,
-                            ...{ isCollectionFolder: false },
                         };
                     }
                     return {
@@ -263,10 +260,10 @@ export default {
             await alert.present();
         },
         addFiles() {
-            this.filepicker.click();
+            this.$refs.filepicker.click();
         },
         addFolder() {
-            this.folderpicker.click();
+            this.$refs.folderpicker.click();
         },
         /**
          * Convert File to base64 string
@@ -315,7 +312,10 @@ export default {
                     }
                 }
             }
-
+            // Empty input value
+            this.$refs.filepicker.value = "";
+            this.$refs.folderpicker.value = "";
+            // Reload documents
             this.loadDocuments();
         },
         /**
@@ -325,52 +325,42 @@ export default {
         async folderSelected($event) {
             // Array of all the elements in the folder but not the included folders
             const files = $event.target.files; // FileList
-            /*
-                Web
-            */
             // Loop all files
             for (const file of files) {
                 try {
-                    // First of all check if the file can be processed
+                    // First check if the file can be processed
                     const base64Data = await this.convertBlobToBase64(file);
 
-                    // Relative paths per file, we'll use this to know what a file's path is
+                    // Relative paths per file, we'll use this to know what a file's path
                     const relativePaths = file.webkitRelativePath.split("/");
-                    // Loop paths from each file
-                    for (let i = 0; i < relativePaths.length; i++) {
-                        // Create the parent folder if another parent folder exists
-                        if (relativePaths[i + 1]) {
-                            // Push into newPath all the relativePaths until the current one
-                            let newPath = relativePaths.filter(
-                                (path, index) => {
-                                    return index <= i;
-                                }
-                            );
-                            // Make a string from the array of paths
-                            newPath = newPath.join("/");
-                            await this.mkdirHelper(
-                                `${this.currentFolder}/${newPath}`
-                            );
-                        } else {
-                            // Write the file to the last file's parent folder founded
-                            const newPath = relativePaths.join("/");
+                    // Remove the last element (which should be the file's name)
+                    relativePaths.pop();
 
-                            await Filesystem.writeFile({
-                                path: newPath,
-                                data: base64Data,
-                                directory: this.APP_DIRECTORY,
-                            });
-                        }
+                    const newPath =
+                        this.currentFolder + "/" + relativePaths.join("/");
+
+                    // Try to create the folder
+                    await this.mkdirHelper(newPath);
+
+                    if (base64Data) {
+                        // Write file
+                        await Filesystem.writeFile({
+                            path: newPath + "/" + file.name,
+                            data: base64Data,
+                            directory: this.APP_DIRECTORY,
+                        });
                     }
                 } catch (error) {
-                    console.log(error.message + " for: " + file.name);
+                    console.log(error.message + " For: " + file.name);
                 }
             }
+            // Empty input value
+            this.$refs.filepicker.value = "";
+            this.$refs.folderpicker.value = "";
+            // Reload documents
             this.loadDocuments();
         },
         async openFile(entry) {
-            console.log(entry);
-
             if (this.isHybrid) {
                 console.log("hybrid");
                 // Get the URI and use our Cordova plugin for preview
@@ -502,8 +492,6 @@ export default {
         },
     },
     mounted() {
-        this.filepicker = this.$refs.filepicker;
-        this.folderpicker = this.$refs.folderpicker;
         this.checkRootFolder().then(() => {
             this.loadDocuments();
         });
