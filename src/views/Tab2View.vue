@@ -2,13 +2,13 @@
     <ion-page>
         <ion-header>
             <ion-toolbar>
-                <ion-title>Collections Explorer</ion-title>
+                <ion-title>File Explorer</ion-title>
             </ion-toolbar>
         </ion-header>
         <ion-content :fullscreen="true">
             <ion-header collapse="condense">
                 <ion-toolbar>
-                    <ion-title size="large">Collections Explorer</ion-title>
+                    <ion-title size="large">File Explorer</ion-title>
                 </ion-toolbar>
             </ion-header>
             <!-- Main content -->

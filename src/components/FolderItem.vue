@@ -17,7 +17,11 @@
         </ion-item-options>
 
         <ion-item-options side="end">
-            <ion-item-option @click="startCopy(item)" color="success">
+            <ion-item-option
+                v-if="item.isFile"
+                @click="startCopy(item)"
+                color="success"
+            >
                 <ion-icon :icon="copyOutline" slot="icon-only" />
             </ion-item-option>
         </ion-item-options>
@@ -26,29 +30,44 @@
         <ion-item>
             <ion-item
                 @click="itemClicked(item)"
+                :title="item.isFile ? 'Open file' : 'Open folder'"
                 color="light"
                 style="cursor: pointer"
             >
                 <ion-icon
-                    :icon="item.isFile ? documentOutline : folderOutline"
                     slot="start"
+                    style="pointer-events: none"
+                    :icon="item.isFile ? documentOutline : folderOutline"
                 />
                 {{ item.name }}
             </ion-item>
-            <!-- Delete -->
-            <ion-button slot="end" color="light" @click="deleteDocument(item)">
-                <ion-icon
-                    :icon="trashOutline"
-                    color="danger"
-                    slot="icon-only"
-                />
-            </ion-button>
             <!-- Copy -->
-            <ion-button slot="end" color="light" @click="startCopy(item)">
+            <ion-button
+                v-if="item.isFile"
+                title="Copy file"
+                slot="end"
+                color="light"
+                @click="startCopy(item)"
+            >
                 <ion-icon
-                    :icon="copyOutline"
                     color="success"
                     slot="icon-only"
+                    style="pointer-events: none"
+                    :icon="copyOutline"
+                />
+            </ion-button>
+            <!-- Delete -->
+            <ion-button
+                slot="end"
+                title="Delete item"
+                color="light"
+                @click="deleteDocument(item)"
+            >
+                <ion-icon
+                    color="danger"
+                    slot="icon-only"
+                    style="pointer-events: none"
+                    :icon="trashOutline"
                 />
             </ion-button>
         </ion-item>

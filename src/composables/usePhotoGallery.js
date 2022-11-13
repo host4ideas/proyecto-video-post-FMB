@@ -111,7 +111,7 @@ export function usePhotoGallery() {
                         {
                             text: "Confirm",
                             role: "confirm",
-                            handler: async (data) => {
+                            handler: (data) => {
                                 fileName = data.name;
                             },
                         },

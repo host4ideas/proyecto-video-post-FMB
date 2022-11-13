@@ -1,21 +1,35 @@
 <template>
     <ion-header>
-        <ion-toolbar :color="copyFile ? 'secondary' : 'primary'">
+        <ion-toolbar
+            class="toolbar"
+            :color="copyFile ? 'secondary' : 'primary'"
+        >
             <ion-button
                 slot="start"
+                title="Go back"
                 v-if="currentFolder != '' && currentFolder !== ROOT_FOLDER"
                 @click="handleBackButton()"
             >
                 <ion-icon :icon="arrowBackCircleOutline" />
             </ion-button>
             <ion-button
-                style="margin-right: 20px"
                 slot="end"
+                title="Reload content"
                 @click="loadDocuments()"
             >
                 <ion-icon :icon="reloadOutline" />
             </ion-button>
-            <ion-title> {{ currentFolder || "File Explorer" }} </ion-title>
+            <ion-title>
+                <div
+                    :class="
+                        isHybrid
+                            ? 'scrolling-wrapper mobile-scroll'
+                            : 'scrolling-wrapper'
+                    "
+                >
+                    {{ currentFolder || "File Explorer" }}
+                </div>
+            </ion-title>
         </ion-toolbar>
     </ion-header>
 
@@ -89,6 +103,47 @@
         </ion-fab-list>
     </ion-fab>
 </template>
+
+<style scoped>
+.toolbar {
+    padding: none;
+}
+
+.scrolling-wrapper {
+    position: relative;
+    overflow-x: scroll;
+    overflow-y: hidden;
+    white-space: nowrap;
+    box-sizing: content-box;
+    padding-bottom: 5px;
+}
+
+.scrolling-wrapper::-webkit-scrollbar-track {
+    -webkit-box-shadow: inset 0 0 6px rgba(0, 0, 0, 0);
+    box-shadow: inset 0 0 6px rgba(0, 0, 0, 0);
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.scrolling-wrapper::-webkit-scrollbar {
+    height: 3px;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.scrolling-wrapper::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+.mobile-scroll {
+    /* Hide scrollbar for IE, Edge and Firefox */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.mobile-scroll::-webkit-scrollbar {
+    display: none;
+}
+</style>
 
 <script>
 // Ionic && Vue
@@ -379,13 +434,35 @@ export default {
                     path: entry.uri,
                 });
 
-                const a = document.createElement("a");
-                document.body.appendChild(a);
-                a.setAttribute("style", "display: none");
-                a.href = "data:;base64," + file.data;
-                a.download = entry.name;
-                a.click();
-                a.remove();
+                const alert = await alertController.create({
+                    message: `<img src="data:;base64,${file.data}"; />`,
+                    buttons: [
+                        {
+                            text: "Download",
+                            handler: () => {
+                                const a = document.createElement("a");
+                                document.body.appendChild(a);
+                                a.setAttribute("style", "display: none");
+                                a.href = "data:;base64," + file.data;
+                                a.download = entry.name;
+                                a.click();
+                                a.remove();
+                            },
+                        },
+                        {
+                            text: "Delete",
+                            handler: () => {
+                                this.deleteDocument(entry);
+                            },
+                        },
+                        {
+                            text: "Cancel",
+                            role: "cancel",
+                        },
+                    ],
+                });
+
+                await alert.present();
             }
         },
         async itemClicked(entry) {
@@ -393,8 +470,11 @@ export default {
                 // We can only copy to a folder
                 if (entry.isFile) {
                     const toast = await toastController.create({
-                        message: "Please select a folder for your operation",
+                        message: "Select a folder for the operation",
+                        duration: 2000,
+                        position: "top",
                     });
+
                     await toast.present();
                     return;
                 }
@@ -413,10 +493,37 @@ export default {
                     }
                     const folder = encodeURIComponent(pathToOpen);
 
-                    console.log(`/tabs/tab2/${folder}`);
-
                     this.$router.push(`/tabs/tab2/${folder}`);
                 }
+            }
+        },
+        startCopy(file) {
+            this.copyFile = file;
+        },
+        async finishCopyFile(entry) {
+            try {
+                const current =
+                    this.currentFolder != "" ? `/${this.currentFolder}` : "";
+
+                const fromUri = await Filesystem.getUri({
+                    directory: this.APP_DIRECTORY,
+                    path: `${current}/${this.copyFile.name}`,
+                });
+
+                const destUri = await Filesystem.getUri({
+                    directory: this.APP_DIRECTORY,
+                    path: `${current}/${entry.name}/${this.copyFile.name}`,
+                });
+
+                await Filesystem.copy({
+                    from: fromUri.uri,
+                    to: destUri.uri,
+                });
+            } catch (error) {
+                console.warn(error);
+            } finally {
+                this.copyFile = null;
+                this.loadDocuments();
             }
         },
         async deleteDocument(entry) {
@@ -432,30 +539,6 @@ export default {
                     recursive: true, // Removes all files as well!
                 });
             }
-            this.loadDocuments();
-        },
-        startCopy(file) {
-            this.copyFile = file;
-        },
-        async finishCopyFile(entry) {
-            const current =
-                this.currentFolder != "" ? `/${this.currentFolder}` : "";
-
-            const fromUri = await Filesystem.getUri({
-                directory: this.APP_DIRECTORY,
-                path: `${current}/${this.copyFile.name}`,
-            });
-
-            const destUri = await Filesystem.getUri({
-                directory: this.APP_DIRECTORY,
-                path: `${current}/${entry.name}/${this.copyFile.name}`,
-            });
-
-            await Filesystem.copy({
-                from: fromUri.uri,
-                to: destUri.uri,
-            });
-            this.copyFile = null;
             this.loadDocuments();
         },
         /**
