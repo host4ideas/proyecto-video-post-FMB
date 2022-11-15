@@ -31,7 +31,7 @@
     </ion-page>
 </template>
 
-<script>
+<script setup>
 import {
     IonTabBar,
     IonTabButton,
@@ -43,24 +43,4 @@ import {
     IonRouterOutlet,
 } from "@ionic/vue";
 import { images, fileTray } from "ionicons/icons";
-
-export default {
-    name: "TabsLayout",
-    data() {
-        return {
-            images,
-            fileTray,
-        };
-    },
-    components: {
-        IonTabBar,
-        IonTabButton,
-        IonTabs,
-        IonContent,
-        IonLabel,
-        IonIcon,
-        IonPage,
-        IonRouterOutlet,
-    },
-};
 </script>

@@ -12,12 +12,12 @@
                 </ion-toolbar>
             </ion-header>
             <!-- Main content -->
-            <FileExplorer :currentFolder="folder" />
+            <FileExplorer :currentFolder="props.folder" />
         </ion-content>
     </ion-page>
 </template>
 
-<script>
+<script setup>
 import {
     IonPage,
     IonHeader,
@@ -26,19 +26,9 @@ import {
     IonContent,
 } from "@ionic/vue";
 import FileExplorer from "@/components/FileExplorer.vue";
+import { defineProps } from "vue";
 
-export default {
-    name: "Tab2View",
-    props: {
-        folder: String,
-    },
-    components: {
-        IonPage,
-        IonHeader,
-        IonToolbar,
-        IonTitle,
-        IonContent,
-        FileExplorer,
-    },
-};
+const props = defineProps({
+    folder: String,
+});
 </script>

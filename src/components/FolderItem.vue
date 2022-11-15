@@ -3,23 +3,23 @@
         <!-- The actual file/folder item with click event -->
         <ion-item @click="itemClicked(item)">
             <ion-icon
-                :icon="item.isFile ? documentOutline : folderOutline"
+                :icon="props.item.isFile ? documentOutline : folderOutline"
                 slot="start"
             />
-            {{ item.name }}
+            {{ props.item.name }}
         </ion-item>
 
         <!-- The start/end option buttons for all operations -->
         <ion-item-options side="start">
-            <ion-item-option @click="deleteDocument(item)" color="danger">
+            <ion-item-option @click="deleteDocument(props.item)" color="danger">
                 <ion-icon :icon="trashOutline" slot="icon-only" />
             </ion-item-option>
         </ion-item-options>
 
         <ion-item-options side="end">
             <ion-item-option
-                v-if="item.isFile"
-                @click="startCopy(item)"
+                v-if="props.item.isFile"
+                @click="startCopy(props.item)"
                 color="success"
             >
                 <ion-icon :icon="copyOutline" slot="icon-only" />
@@ -29,25 +29,25 @@
     <div v-else>
         <ion-item>
             <ion-item
-                @click="itemClicked(item)"
-                :title="item.isFile ? 'Open file' : 'Open folder'"
+                @click="itemClicked(props.item)"
+                :title="props.item.isFile ? 'Open file' : 'Open folder'"
                 color="light"
                 style="cursor: pointer"
             >
                 <ion-icon
                     slot="start"
                     style="pointer-events: none"
-                    :icon="item.isFile ? documentOutline : folderOutline"
+                    :icon="props.item.isFile ? documentOutline : folderOutline"
                 />
-                {{ item.name }}
+                {{ props.item.name }}
             </ion-item>
             <!-- Copy -->
             <ion-button
-                v-if="item.isFile"
+                v-if="props.item.isFile"
                 title="Copy file"
                 slot="end"
                 color="light"
-                @click="startCopy(item)"
+                @click="startCopy(props.item)"
             >
                 <ion-icon
                     color="success"
@@ -61,7 +61,7 @@
                 slot="end"
                 title="Delete item"
                 color="light"
-                @click="deleteDocument(item)"
+                @click="deleteDocument(props.item)"
             >
                 <ion-icon
                     color="danger"
@@ -74,7 +74,7 @@
     </div>
 </template>
 
-<script>
+<script setup>
 import {
     IonIcon,
     IonButton,
@@ -89,31 +89,12 @@ import {
     folderOutline,
     copyOutline,
 } from "ionicons/icons";
+import { defineProps } from "vue";
 
-export default {
-    name: "FolderItem",
-    props: ["item", "itemClicked", "deleteDocument", "startCopy"],
-    components: {
-        IonIcon,
-        IonButton,
-        IonItemOption,
-        IonItemOptions,
-        IonItem,
-    },
-    data() {
-        return {
-            // Variables
-            ROOT_FOLDER: "my-photo-collections",
-            isChecked: false,
-            isDisabled: false,
-            // Ionic
-            isPlatform,
-            // Icons
-            trashOutline,
-            documentOutline,
-            folderOutline,
-            copyOutline,
-        };
-    },
-};
+const props = defineProps([
+    "item",
+    "itemClicked",
+    "deleteDocument",
+    "startCopy",
+]);
 </script>

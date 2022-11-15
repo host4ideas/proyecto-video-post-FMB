@@ -38,7 +38,7 @@
     </ion-page>
 </template>
 
-<script>
+<script setup>
 import { camera, trash, close } from "ionicons/icons";
 import {
     actionSheetController,
@@ -57,57 +57,30 @@ import {
 } from "@ionic/vue";
 import { usePhotoGallery } from "@/composables/usePhotoGallery";
 
-export default {
-    name: "Tab1View",
-    components: {
-        IonPage,
-        IonHeader,
-        IonFab,
-        IonFabButton,
-        IonIcon,
-        IonToolbar,
-        IonTitle,
-        IonContent,
-        IonImg,
-        IonGrid,
-        IonRow,
-        IonCol,
-    },
-    data() {
-        const { photos, takePhoto, deletePhoto } = usePhotoGallery();
+const { photos, takePhoto, deletePhoto } = usePhotoGallery();
 
-        return {
-            camera,
-            photos,
-            takePhoto,
-            deletePhoto,
-        };
-    },
-    methods: {
-        async showActionSheet(photo) {
-            const actionSheet = await actionSheetController.create({
-                header: "Photos",
-                buttons: [
-                    {
-                        text: "Delete",
-                        role: "destructive",
-                        icon: trash,
-                        handler: () => {
-                            this.deletePhoto(photo);
-                        },
-                    },
-                    {
-                        text: "Cancel",
-                        icon: close,
-                        role: "cancel",
-                        handler: () => {
-                            // Nothing to do, action sheet is automatically closed
-                        },
-                    },
-                ],
-            });
-            await actionSheet.present();
-        },
-    },
-};
+async function showActionSheet(photo) {
+    const actionSheet = await actionSheetController.create({
+        header: "Photos",
+        buttons: [
+            {
+                text: "Delete",
+                role: "destructive",
+                icon: trash,
+                handler: () => {
+                    deletePhoto(photo);
+                },
+            },
+            {
+                text: "Cancel",
+                icon: close,
+                role: "cancel",
+                handler: () => {
+                    // Nothing to do, action sheet is automatically closed
+                },
+            },
+        ],
+    });
+    await actionSheet.present();
+}
 </script>
