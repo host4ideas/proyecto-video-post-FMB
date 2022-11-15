@@ -2,12 +2,15 @@
     <ion-header>
         <ion-toolbar
             class="toolbar"
-            :color="copyFile ? 'secondary' : 'primary'"
+            :color="data.copyFile ? 'secondary' : 'primary'"
         >
             <ion-button
                 slot="start"
                 title="Go back"
-                v-if="currentFolder != '' && currentFolder !== ROOT_FOLDER"
+                v-if="
+                    props.currentFolder != '' &&
+                    props.currentFolder !== Global.ROOT_FOLDER
+                "
                 @click="handleBackButton()"
             >
                 <ion-icon :icon="arrowBackCircleOutline" />
@@ -27,7 +30,7 @@
                             : 'scrolling-wrapper'
                     "
                 >
-                    {{ currentFolder || "File Explorer" }}
+                    {{ props.currentFolder || "File Explorer" }}
                 </div>
             </ion-title>
         </ion-toolbar>
@@ -54,22 +57,29 @@
     <!-- Info if the directory is empty -->
     <ion-text
         color="medium"
-        v-if="folderContent.length == 0"
+        v-if="data.folderContent.length == 0"
         class="ion-padding ion-text-center"
     >
         <p>No documents found</p>
     </ion-text>
 
     <FolderContent
-        :folderContent="this.folderContent"
-        :itemClicked="this.itemClicked"
-        :deleteDocument="this.deleteDocument"
+        :folderContent="data.folderContent"
+        :itemClicked="itemClicked"
+        :deleteDocument="deleteDocument"
         :startCopy="startCopy"
-        :currentFolder="currentFolder"
     />
 
     <!-- Fab to add files & folders -->
     <ion-fab vertical="bottom" horizontal="end" slot="fixed">
+        <ion-fab-button
+            v-if="data.copyFile"
+            @click="cancelCopy()"
+            color="danger"
+            style="margin-bottom: 15px"
+        >
+            <ion-icon :icon="closeOutline" />
+        </ion-fab-button>
         <ion-fab-button>
             <ion-icon :icon="add" />
         </ion-fab-button>
@@ -104,49 +114,8 @@
     </ion-fab>
 </template>
 
-<style scoped>
-.toolbar {
-    padding: none;
-}
-
-.scrolling-wrapper {
-    position: relative;
-    overflow-x: scroll;
-    overflow-y: hidden;
-    white-space: nowrap;
-    box-sizing: content-box;
-    padding-bottom: 5px;
-}
-
-.scrolling-wrapper::-webkit-scrollbar-track {
-    -webkit-box-shadow: inset 0 0 6px rgba(0, 0, 0, 0);
-    box-shadow: inset 0 0 6px rgba(0, 0, 0, 0);
-    background-color: rgba(0, 0, 0, 0);
-}
-
-.scrolling-wrapper::-webkit-scrollbar {
-    height: 3px;
-    background-color: rgba(0, 0, 0, 0);
-}
-
-.scrolling-wrapper::-webkit-scrollbar-thumb {
-    background-color: rgba(0, 0, 0, 0.5);
-}
-
-.mobile-scroll {
-    /* Hide scrollbar for IE, Edge and Firefox */
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-}
-
-/* Hide scrollbar for Chrome, Safari and Opera */
-.mobile-scroll::-webkit-scrollbar {
-    display: none;
-}
-</style>
-
-<script>
-// Ionic && Vue
+<script setup>
+// Ionic
 import {
     IonHeader,
     IonToolbar,
@@ -157,19 +126,18 @@ import {
     IonFabList,
     IonButton,
     IonText,
-    isPlatform,
-    toastController,
     alertController,
+    toastController,
+    isPlatform,
 } from "@ionic/vue";
 // Plugins
-import { Filesystem, Directory } from "@capacitor/filesystem";
+import { Filesystem } from "@capacitor/filesystem";
 import { PreviewAnyFile } from "@ionic-native/preview-any-file";
 // Custom components
 import FolderContent from "./FolderContent";
 // Icons
 import {
     add,
-    checkmark,
     documentOutline,
     folderOutline,
     arrowBackCircleOutline,
@@ -177,385 +145,335 @@ import {
     closeOutline,
     reloadOutline,
 } from "ionicons/icons";
-import router from "@/router/index";
+// Vue
+import { defineProps, watch, onMounted, ref, reactive } from "vue";
+import { useRouter } from "vue-router";
+// Global
+import Global from "../Global";
 
-export default {
-    name: "FileExplorer",
-    components: {
-        // Variables
-        FolderContent,
-        // Ionic
-        IonHeader,
-        IonToolbar,
-        IonTitle,
-        IonFab,
-        IonFabButton,
-        IonFabList,
-        IonIcon,
-        IonButton,
-        IonText,
-    },
-    props: {
-        currentFolder: String,
-        isImageComparison: Boolean,
-    },
-    data() {
-        return {
-            // Ionic
-            isHybrid: isPlatform("hybrid"),
-            // Variables
-            folderContent: [],
-            copyFile: null,
-            filepicker: null,
-            folderpicker: null,
-            APP_DIRECTORY: Directory.Documents,
-            ROOT_FOLDER: "my-photo-collections",
-            // Use Vue router
-            router: router,
-            // Icons
-            arrowBackCircleOutline,
-            fileTrayStackedOutline,
-            documentOutline,
-            folderOutline,
-            checkmark,
-            add,
-            closeOutline,
-            reloadOutline,
-        };
-    },
-    methods: {
-        handleBackButton() {
-            /*
-                Due to history navigation between tabs is problematic.
-                e.g.: /tabs/tab3/test/ -> /tab2/ -> /tabs/tab3/test/ -> tab back button -> undefined folder
-            */
-            let newPath = "";
-            const folders = this.currentFolder.split("/");
-            // Check if there is a prev folder from the URL
-            if (folders[folders.indexOf(folders[folders.length - 2])]) {
-                const openedFolder = folders[folders.length - 1];
-                newPath = folders.join("/").replace(`/${openedFolder}`, "");
-                newPath = encodeURIComponent(newPath);
-                router.replace(newPath);
-            } else {
-                // If there isn`t a prev folder, means the root folder
-                newPath = `/tabs/tab2/${this.ROOT_FOLDER}`;
-                this.$router.replace(newPath);
-            }
-            newPath = null;
-        },
-        async loadDocuments() {
-            try {
-                const folderContent = await Filesystem.readdir({
-                    directory: this.APP_DIRECTORY,
-                    path: this.currentFolder || "",
-                });
+const router = useRouter();
 
-                // The directory array is just strings
-                // We add the information isFile to make life easier
-                this.folderContent = folderContent.files.map((file) => {
-                    if (file.type === "directory") {
-                        file = {
-                            ...file,
-                        };
-                    }
-                    return {
-                        name: file.name,
-                        isFile: file.type == "file",
-                        uri: file.uri.replace("/DOCUMENTS/", ""),
-                    };
-                });
-            } catch (e) {
-                console.log("CURRENT FOLDER: " + this.currentFolder);
-                console.log(e.message);
-                this.$router.back();
-                this.loadDocuments();
-            }
-        },
-        async mkdirHelper(path) {
-            try {
-                await Filesystem.mkdir({
-                    directory: this.APP_DIRECTORY,
-                    path: path,
-                });
-                this.loadDocuments();
-                return true;
-            } catch (error) {
-                console.log(error.message);
-                return false;
-            }
-        },
-        async createFolder() {
-            const alert = await alertController.create({
-                header: "Create folder",
-                message: "Please specify the name of the new folder",
-                inputs: [
-                    {
-                        name: "name",
-                        type: "text",
-                        placeholder: "MyDir",
-                    },
-                ],
-                buttons: [
-                    {
-                        text: "Cancel",
-                        role: "cancel",
-                    },
-                    {
-                        text: "Create",
-                        handler: async (data) => {
-                            await this.mkdirHelper(
-                                `${this.currentFolder}/${data.name}`
-                            );
-                        },
-                    },
-                ],
+const props = defineProps({
+    currentFolder: String,
+});
+
+const isHybrid = isPlatform("hybrid");
+
+const data = reactive({
+    folderContent: [],
+    copyFile: null,
+});
+
+const filepicker = ref(null);
+const folderpicker = ref(null);
+
+/**
+ * Function triggered on item click, both files and folders.
+ * If there is an ongoing copu process uses the last clicked folder as the new path for the file (calling finishCopyFile(). If a file is clicked, an error message will be shown.
+ * If not, it will just open the file (calling openFile()) or folder (router push).
+ * @param {File} entry File clicked
+ * @returns {null}
+ */
+const itemClicked = async (entry) => {
+    if (data.copyFile) {
+        // We can only copy to a folder
+        if (entry.isFile) {
+            const toast = await toastController.create({
+                message: "Select a folder for the operation",
+                duration: 2000,
+                position: "top",
             });
 
-            await alert.present();
-        },
-        addFiles() {
-            this.$refs.filepicker.click();
-        },
-        addFolder() {
-            this.$refs.folderpicker.click();
-        },
-        /**
-         * Convert File to base64 string
-         */
-        convertBlobToBase64(blob) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onerror = reject;
-                reader.onload = () => {
-                    resolve(reader.result);
+            await toast.present();
+            return;
+        }
+        // Finish the ongoing operation
+        finishCopyFile(entry);
+    } else {
+        // Open the file or folder
+        if (entry.isFile) {
+            openFile(entry);
+        } else {
+            let pathToOpen;
+            if (props.currentFolder != "") {
+                pathToOpen = props.currentFolder + "/" + entry.name;
+            } else {
+                pathToOpen = entry.name;
+            }
+            const folder = encodeURIComponent(pathToOpen);
+
+            router.push(`/tabs/tab2/${folder}`);
+
+            return;
+        }
+    }
+};
+
+/**
+ * Handles both files and folders. If a file is clicked in web, the file will be downloaded. If a file is clicked in mobile, it will use PreviewAnyFile library to handle the file with 3rd party user apps.
+ * @param {File} entry Folder or file to open.
+ */
+const openFile = async (entry) => {
+    if (isHybrid) {
+        // Get the URI and use our Cordova plugin for preview
+        const fileUri = await Filesystem.getUri({
+            directory: Global.APP_DIRECTORY,
+            path: entry.uri,
+        });
+
+        console.log(fileUri);
+
+        PreviewAnyFile.preview(fileUri.uri)
+            .then((res) => console.log(res))
+            .catch((error) => console.error(error));
+    } else {
+        // Browser fallback to download the file
+        const file = await Filesystem.readFile({
+            directory: Global.APP_DIRECTORY,
+            path: entry.uri,
+        });
+
+        const alert = await alertController.create({
+            message: `<img src="data:;base64,${file.data}"; />`,
+            buttons: [
+                {
+                    text: "Download",
+                    handler: () => {
+                        const a = document.createElement("a");
+                        document.body.appendChild(a);
+                        a.setAttribute("style", "display: none");
+                        a.href = "data:;base64," + file.data;
+                        a.download = entry.name;
+                        a.click();
+                        a.remove();
+                    },
+                },
+                {
+                    text: "Delete",
+                    handler: () => {
+                        deleteDocument(entry);
+                    },
+                },
+                {
+                    text: "Cancel",
+                    role: "cancel",
+                },
+            ],
+        });
+
+        await alert.present();
+    }
+};
+
+/**
+ * Handles both a document or a folder to delete when delete button is clicked.
+ * @param {*} entry File or folder to delete
+ */
+const deleteDocument = async (entry) => {
+    if (entry.isFile) {
+        await Filesystem.deleteFile({
+            directory: Global.APP_DIRECTORY,
+            path: props.currentFolder + "/" + entry.name,
+        });
+    } else {
+        await Filesystem.rmdir({
+            directory: Global.APP_DIRECTORY,
+            path: props.currentFolder + "/" + entry.name,
+            recursive: true, // Removes all files as well!
+        });
+    }
+    loadDocuments();
+};
+
+/**
+ * Helper to create a folder using the path parameter.
+ * @param {string} path New path for the new folder.
+ * @returns {Promise<boolean>} True if completed, false if an error ocurred
+ */
+const mkdirHelper = async (path) => {
+    try {
+        await Filesystem.mkdir({
+            directory: Global.APP_DIRECTORY,
+            path: path,
+        });
+        loadDocuments();
+        return true;
+    } catch (error) {
+        console.log(error.message);
+        return false;
+    }
+};
+
+/**
+ * Load the documents from the actual path (gets it from props)
+ */
+const loadDocuments = async () => {
+    try {
+        const folderContent = await Filesystem.readdir({
+            directory: Global.APP_DIRECTORY,
+            path: props.currentFolder || "",
+        });
+
+        // The directory array is just strings
+        // We add the information isFile to make life easier
+        data.folderContent = folderContent.files.map((file) => {
+            if (file.type === "directory") {
+                file = {
+                    ...file,
                 };
-                reader.readAsDataURL(blob);
+            }
+            return {
+                name: file.name,
+                isFile: file.type == "file",
+                uri: file.uri.replace("/DOCUMENTS/", ""),
+            };
+        });
+
+        return data.folderContent;
+    } catch (e) {
+        // Could be an error because the ROOT folder was deleted
+        await checkRootFolder();
+        console.log("CURRENT FOLDER: " + props.currentFolder);
+        console.log(e.message);
+        router.back();
+        loadDocuments();
+    }
+};
+
+/**
+ * Copies a file using it's current uri (from) and the clicked folder's uri (to) passed as parameter.
+ * @param {File} entry File to copy
+ */
+const finishCopyFile = async (entry) => {
+    try {
+        const current =
+            props.currentFolder != "" ? `/${props.currentFolder}` : "";
+
+        const fromUri = await Filesystem.getUri({
+            directory: Global.APP_DIRECTORY,
+            path: `${current}/${data.copyFile.name}`,
+        });
+
+        const destUri = await Filesystem.getUri({
+            directory: Global.APP_DIRECTORY,
+            path: `${current}/${entry.name}/${data.copyFile.name}`,
+        });
+
+        await Filesystem.copy({
+            from: fromUri.uri,
+            to: destUri.uri,
+        });
+    } catch (error) {
+        console.warn(error);
+    } finally {
+        data.copyFile = null;
+        loadDocuments();
+    }
+};
+
+/**
+ * Triggers the copy process by modifying the value of copyFile reactive variable, therefore the UI is updated.
+ * @param {File} file File or folder to copy.
+ */
+const startCopy = (file) => {
+    data.copyFile = file;
+};
+
+/**
+ * Cancels the copy process by erasing copyFile variable from memory, therefore the UI is updated.
+ */
+const cancelCopy = () => {
+    data.copyFile = null;
+};
+
+/**
+ * Convert File to base64 string
+ */
+const convertBlobToBase64 = (blob) => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = reject;
+        reader.onload = () => {
+            resolve(reader.result);
+        };
+        reader.readAsDataURL(blob);
+    });
+};
+
+function handleBackButton() {
+    /*
+        Due to history navigation between tabs is problematic.
+        e.g.: /tabs/tab3/test/ -> /tab2/ -> /tabs/tab3/test/ -> tab back button -> undefined folder
+    */
+    let newPath = "";
+    const folders = props.currentFolder.split("/");
+    // Check if there is a prev folder from the URL
+    if (folders[folders.indexOf(folders[folders.length - 2])]) {
+        const openedFolder = folders[folders.length - 1];
+        newPath = folders.join("/").replace(`/${openedFolder}`, "");
+        newPath = encodeURIComponent(newPath);
+        router.replace(newPath);
+    } else {
+        // If there isn`t a prev folder, means the root folder
+        newPath = `/tabs/tab2/${Global.ROOT_FOLDER}`;
+        router.replace(newPath);
+    }
+    newPath = null;
+}
+
+async function createFolder() {
+    const alert = await alertController.create({
+        header: "Create folder",
+        message: "Please specify the name of the new folder",
+        inputs: [
+            {
+                name: "name",
+                type: "text",
+                placeholder: "MyDir",
+            },
+        ],
+        buttons: [
+            {
+                text: "Cancel",
+                role: "cancel",
+            },
+            {
+                text: "Create",
+                handler: async (data) => {
+                    await mkdirHelper(`${props.currentFolder}/${data.name}`);
+                },
+            },
+        ],
+    });
+
+    await alert.present();
+}
+
+function addFiles() {
+    filepicker.value.click();
+}
+
+function addFolder() {
+    folderpicker.value.click();
+}
+
+async function fileSelected($event) {
+    const selected = $event.target.files;
+
+    for (let i = 0; i < selected.length; i++) {
+        try {
+            const base64Data = await convertBlobToBase64(selected[i]);
+
+            await Filesystem.writeFile({
+                path: `${props.currentFolder}/${selected[i].name}`,
+                data: base64Data,
+                directory: Global.APP_DIRECTORY,
             });
-        },
-        async fileSelected($event) {
-            const selected = $event.target.files;
-
-            for (let i = 0; i < selected.length; i++) {
-                try {
-                    const base64Data = await this.convertBlobToBase64(
-                        selected[i]
-                    );
-
-                    await Filesystem.writeFile({
-                        path: `${this.currentFolder}/${selected[i].name}`,
-                        data: base64Data,
-                        directory: this.APP_DIRECTORY,
-                    });
-                } catch (error) {
-                    if (error.message === "Maximum call stack size exceeded") {
-                        const alert = await alertController.create({
-                            header: "Error",
-                            message: `File <b><i>${selected[i].name}</i></b> is too big`,
-                            buttons: [
-                                {
-                                    text: "OK",
-                                    role: "cancel",
-                                },
-                            ],
-                        });
-
-                        await alert.present();
-                        console.log(
-                            error.message + " for: " + selected[i].name
-                        );
-                    }
-                }
-            }
-            // Empty input value
-            this.$refs.filepicker.value = "";
-            this.$refs.folderpicker.value = "";
-            // Reload documents
-            this.loadDocuments();
-        },
-        /**
-         * ONLY FOR WEB
-         * For each file (event.target.files) and its webkitRelativePath, create its parent folder(s) and insert the file in that folder.
-         */
-        async folderSelected($event) {
-            // Array of all the elements in the folder but not the included folders
-            const files = $event.target.files; // FileList
-            // Loop all files
-            for (const file of files) {
-                try {
-                    // First check if the file can be processed
-                    const base64Data = await this.convertBlobToBase64(file);
-
-                    // Relative paths per file, we'll use this to know what a file's path
-                    const relativePaths = file.webkitRelativePath.split("/");
-                    // Remove the last element (which should be the file's name)
-                    relativePaths.pop();
-
-                    const newPath =
-                        this.currentFolder + "/" + relativePaths.join("/");
-
-                    // Try to create the folder
-                    await this.mkdirHelper(newPath);
-
-                    if (base64Data) {
-                        // Write file
-                        await Filesystem.writeFile({
-                            path: newPath + "/" + file.name,
-                            data: base64Data,
-                            directory: this.APP_DIRECTORY,
-                        });
-                    }
-                } catch (error) {
-                    console.log(error.message + " For: " + file.name);
-                }
-            }
-            // Empty input value
-            this.$refs.filepicker.value = "";
-            this.$refs.folderpicker.value = "";
-            // Reload documents
-            this.loadDocuments();
-        },
-        async openFile(entry) {
-            if (this.isHybrid) {
-                console.log("hybrid");
-                // Get the URI and use our Cordova plugin for preview
-                const fileUri = await Filesystem.getUri({
-                    directory: this.APP_DIRECTORY,
-                    path: entry.uri,
-                });
-
-                PreviewAnyFile.preview(fileUri.uri)
-                    .then((res) => console.log(res))
-                    .catch((error) => console.error(error));
-            } else {
-                // Browser fallback to download the file
-                const file = await Filesystem.readFile({
-                    directory: this.APP_DIRECTORY,
-                    path: entry.uri,
-                });
-
+        } catch (error) {
+            if (error.message === "Maximum call stack size exceeded") {
                 const alert = await alertController.create({
-                    message: `<img src="data:;base64,${file.data}"; />`,
-                    buttons: [
-                        {
-                            text: "Download",
-                            handler: () => {
-                                const a = document.createElement("a");
-                                document.body.appendChild(a);
-                                a.setAttribute("style", "display: none");
-                                a.href = "data:;base64," + file.data;
-                                a.download = entry.name;
-                                a.click();
-                                a.remove();
-                            },
-                        },
-                        {
-                            text: "Delete",
-                            handler: () => {
-                                this.deleteDocument(entry);
-                            },
-                        },
-                        {
-                            text: "Cancel",
-                            role: "cancel",
-                        },
-                    ],
-                });
-
-                await alert.present();
-            }
-        },
-        async itemClicked(entry) {
-            if (this.copyFile) {
-                // We can only copy to a folder
-                if (entry.isFile) {
-                    const toast = await toastController.create({
-                        message: "Select a folder for the operation",
-                        duration: 2000,
-                        position: "top",
-                    });
-
-                    await toast.present();
-                    return;
-                }
-                // Finish the ongoing operation
-                this.finishCopyFile(entry);
-            } else {
-                // Open the file or folder
-                if (entry.isFile) {
-                    this.openFile(entry);
-                } else {
-                    let pathToOpen;
-                    if (this.currentFolder != "") {
-                        pathToOpen = this.currentFolder + "/" + entry.name;
-                    } else {
-                        pathToOpen = entry.name;
-                    }
-                    const folder = encodeURIComponent(pathToOpen);
-
-                    this.$router.push(`/tabs/tab2/${folder}`);
-                }
-            }
-        },
-        startCopy(file) {
-            this.copyFile = file;
-        },
-        async finishCopyFile(entry) {
-            try {
-                const current =
-                    this.currentFolder != "" ? `/${this.currentFolder}` : "";
-
-                const fromUri = await Filesystem.getUri({
-                    directory: this.APP_DIRECTORY,
-                    path: `${current}/${this.copyFile.name}`,
-                });
-
-                const destUri = await Filesystem.getUri({
-                    directory: this.APP_DIRECTORY,
-                    path: `${current}/${entry.name}/${this.copyFile.name}`,
-                });
-
-                await Filesystem.copy({
-                    from: fromUri.uri,
-                    to: destUri.uri,
-                });
-            } catch (error) {
-                console.warn(error);
-            } finally {
-                this.copyFile = null;
-                this.loadDocuments();
-            }
-        },
-        async deleteDocument(entry) {
-            if (entry.isFile) {
-                await Filesystem.deleteFile({
-                    directory: this.APP_DIRECTORY,
-                    path: this.currentFolder + "/" + entry.name,
-                });
-            } else {
-                await Filesystem.rmdir({
-                    directory: this.APP_DIRECTORY,
-                    path: this.currentFolder + "/" + entry.name,
-                    recursive: true, // Removes all files as well!
-                });
-            }
-            this.loadDocuments();
-        },
-        /**
-         * Check if the dedicated folders for the app exist in Documents
-         */
-        async checkRootFolder() {
-            try {
-                await Filesystem.readdir({
-                    directory: this.APP_DIRECTORY,
-                    path: this.ROOT_FOLDER,
-                });
-                console.log("Default folder exists.");
-            } catch (error) {
-                const alert = await alertController.create({
-                    header: "Choose root folder",
-                    message: `No default folder found. Default folder will be created in: <i>${this.APP_DIRECTORY}/${this.ROOT_FOLDER}</i>.<br/>
-                                If you want to modify your collections, you can do it in the built-in File Explorer or through your smartphone's preferred File Explorer app.`,
+                    header: "Error",
+                    message: `File <b><i>${selected[i].name}</i></b> is too big`,
                     buttons: [
                         {
                             text: "OK",
@@ -563,22 +481,101 @@ export default {
                         },
                     ],
                 });
+
                 await alert.present();
-                // Create default
-                await this.mkdirHelper(`${this.ROOT_FOLDER}`);
-                console.log(`Default folder created: ${this.ROOT_FOLDER}`);
+                console.log(error.message + " for: " + selected[i].name);
             }
-        },
-    },
-    watch: {
-        currentFolder() {
-            this.loadDocuments();
-        },
-    },
-    mounted() {
-        this.checkRootFolder().then(() => {
-            this.loadDocuments();
+        }
+    }
+    // Empty input value
+    filepicker.value.value = "";
+    folderpicker.value.value = "";
+    // Reload documents
+    this.loadDocuments();
+}
+
+/**
+ * ONLY FOR WEB
+ * For each file (event.target.files) and its webkitRelativePath, create its parent folder(s) and insert the file in that folder.
+ */
+async function folderSelected($event) {
+    // Array of all the elements in the folder but not the included folders
+    const files = $event.target.files; // FileList
+    // Loop all files
+    for (const file of files) {
+        try {
+            // First check if the file can be processed
+            const base64Data = await this.convertBlobToBase64(file);
+
+            // Relative paths per file, we'll use this to know what a file's path
+            const relativePaths = file.webkitRelativePath.split("/");
+            // Remove the last element (which should be the file's name)
+            relativePaths.pop();
+
+            const newPath = props.currentFolder + "/" + relativePaths.join("/");
+
+            // Try to create the folder
+            await mkdirHelper(newPath);
+
+            if (base64Data) {
+                // Write file
+                await Filesystem.writeFile({
+                    path: newPath + "/" + file.name,
+                    data: base64Data,
+                    directory: Global.APP_DIRECTORY,
+                });
+            }
+        } catch (error) {
+            console.log(error.message + " For: " + file.name);
+        }
+    }
+    // Empty input value
+    filepicker.value.value = "";
+    folderpicker.value.value = "";
+    // Reload documents
+    this.loadDocuments();
+}
+
+/**
+ * Check if the dedicated folders for the app exist in Documents
+ */
+async function checkRootFolder() {
+    try {
+        await Filesystem.readdir({
+            directory: Global.APP_DIRECTORY,
+            path: Global.ROOT_FOLDER,
         });
-    },
-};
+        console.log("Default folder exists.");
+    } catch (error) {
+        const alert = await alertController.create({
+            header: "Choose root folder",
+            message: `No default folder found. Default folder will be created in: <i>${Global.APP_DIRECTORY}/${Global.ROOT_FOLDER}</i>.<br/>
+                                If you want to modify your collections, you can do it in the built-in File Explorer or through your smartphone's preferred File Explorer app.`,
+            buttons: [
+                {
+                    text: "OK",
+                    role: "cancel",
+                },
+            ],
+        });
+        await alert.present();
+        // Create default
+        await mkdirHelper(`${Global.ROOT_FOLDER}`);
+        console.log(`Default folder created: ${Global.ROOT_FOLDER}`);
+    }
+}
+
+watch(data, () => {
+    loadDocuments();
+});
+
+onMounted(() => {
+    checkRootFolder().then(() => {
+        loadDocuments();
+    });
+});
 </script>
+
+<style scoped>
+@import "../assets/css/fileExplorer.css";
+</style>
