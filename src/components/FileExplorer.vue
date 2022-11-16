@@ -150,6 +150,10 @@ import { defineProps, watch, onMounted, ref, reactive } from "vue";
 import { useRouter } from "vue-router";
 // Global
 import Global from "../Global";
+// Utils
+import useUtils from "../composables/useUtils";
+
+const { mkdirHelper, checkRootFolder, convertBlobToBase64 } = useUtils();
 
 const router = useRouter();
 
@@ -166,143 +170,6 @@ const data = reactive({
 
 const filepicker = ref(null);
 const folderpicker = ref(null);
-
-/**
- * Function triggered on item click, both files and folders.
- * If there is an ongoing copu process uses the last clicked folder as the new path for the file (calling finishCopyFile(). If a file is clicked, an error message will be shown.
- * If not, it will just open the file (calling openFile()) or folder (router push).
- * @param {File} entry File clicked
- * @returns {null}
- */
-const itemClicked = async (entry) => {
-    if (data.copyFile) {
-        // We can only copy to a folder
-        if (entry.isFile) {
-            const toast = await toastController.create({
-                message: "Select a folder for the operation",
-                duration: 2000,
-                position: "top",
-            });
-
-            await toast.present();
-            return;
-        }
-        // Finish the ongoing operation
-        finishCopyFile(entry);
-    } else {
-        // Open the file or folder
-        if (entry.isFile) {
-            openFile(entry);
-        } else {
-            let pathToOpen;
-            if (props.currentFolder != "") {
-                pathToOpen = props.currentFolder + "/" + entry.name;
-            } else {
-                pathToOpen = entry.name;
-            }
-            const folder = encodeURIComponent(pathToOpen);
-
-            router.push(`/tabs/tab2/${folder}`);
-
-            return;
-        }
-    }
-};
-
-/**
- * Handles both files and folders. If a file is clicked in web, the file will be downloaded. If a file is clicked in mobile, it will use PreviewAnyFile library to handle the file with 3rd party user apps.
- * @param {File} entry Folder or file to open.
- */
-const openFile = async (entry) => {
-    if (isHybrid) {
-        // Get the URI and use our Cordova plugin for preview
-        const fileUri = await Filesystem.getUri({
-            directory: Global.APP_DIRECTORY,
-            path: entry.uri,
-        });
-
-        console.log(fileUri);
-
-        PreviewAnyFile.preview(fileUri.uri)
-            .then((res) => console.log(res))
-            .catch((error) => console.error(error));
-    } else {
-        // Browser fallback to download the file
-        const file = await Filesystem.readFile({
-            directory: Global.APP_DIRECTORY,
-            path: entry.uri,
-        });
-
-        const alert = await alertController.create({
-            message: `<img src="data:;base64,${file.data}"; />`,
-            buttons: [
-                {
-                    text: "Download",
-                    handler: () => {
-                        const a = document.createElement("a");
-                        document.body.appendChild(a);
-                        a.setAttribute("style", "display: none");
-                        a.href = "data:;base64," + file.data;
-                        a.download = entry.name;
-                        a.click();
-                        a.remove();
-                    },
-                },
-                {
-                    text: "Delete",
-                    handler: () => {
-                        deleteDocument(entry);
-                    },
-                },
-                {
-                    text: "Cancel",
-                    role: "cancel",
-                },
-            ],
-        });
-
-        await alert.present();
-    }
-};
-
-/**
- * Handles both a document or a folder to delete when delete button is clicked.
- * @param {*} entry File or folder to delete
- */
-const deleteDocument = async (entry) => {
-    if (entry.isFile) {
-        await Filesystem.deleteFile({
-            directory: Global.APP_DIRECTORY,
-            path: props.currentFolder + "/" + entry.name,
-        });
-    } else {
-        await Filesystem.rmdir({
-            directory: Global.APP_DIRECTORY,
-            path: props.currentFolder + "/" + entry.name,
-            recursive: true, // Removes all files as well!
-        });
-    }
-    loadDocuments();
-};
-
-/**
- * Helper to create a folder using the path parameter.
- * @param {string} path New path for the new folder.
- * @returns {Promise<boolean>} True if completed, false if an error ocurred
- */
-const mkdirHelper = async (path) => {
-    try {
-        await Filesystem.mkdir({
-            directory: Global.APP_DIRECTORY,
-            path: path,
-        });
-        loadDocuments();
-        return true;
-    } catch (error) {
-        console.log(error.message);
-        return false;
-    }
-};
 
 /**
  * Load the documents from the actual path (gets it from props)
@@ -372,6 +239,26 @@ const finishCopyFile = async (entry) => {
 };
 
 /**
+ * Handles both a document or a folder to delete when delete button is clicked.
+ * @param {*} entry File or folder to delete
+ */
+const deleteDocument = async (entry) => {
+    if (entry.isFile) {
+        await Filesystem.deleteFile({
+            directory: Global.APP_DIRECTORY,
+            path: props.currentFolder + "/" + entry.name,
+        });
+    } else {
+        await Filesystem.rmdir({
+            directory: Global.APP_DIRECTORY,
+            path: props.currentFolder + "/" + entry.name,
+            recursive: true, // Removes all files as well!
+        });
+    }
+    loadDocuments();
+};
+
+/**
  * Triggers the copy process by modifying the value of copyFile reactive variable, therefore the UI is updated.
  * @param {File} file File or folder to copy.
  */
@@ -384,20 +271,6 @@ const startCopy = (file) => {
  */
 const cancelCopy = () => {
     data.copyFile = null;
-};
-
-/**
- * Convert File to base64 string
- */
-const convertBlobToBase64 = (blob) => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onerror = reject;
-        reader.onload = () => {
-            resolve(reader.result);
-        };
-        reader.readAsDataURL(blob);
-    });
 };
 
 function handleBackButton() {
@@ -537,33 +410,102 @@ async function folderSelected($event) {
 }
 
 /**
- * Check if the dedicated folders for the app exist in Documents
+ * Handles both files and folders. If a file is clicked in web, the file will be downloaded. If a file is clicked in mobile, it will use PreviewAnyFile library to handle the file with 3rd party user apps.
+ * @param {File} entry Folder or file to open.
  */
-async function checkRootFolder() {
-    try {
-        await Filesystem.readdir({
+const openFile = async (entry) => {
+    if (isHybrid) {
+        // Get the URI and use our Cordova plugin for preview
+        const fileUri = await Filesystem.getUri({
             directory: Global.APP_DIRECTORY,
-            path: Global.ROOT_FOLDER,
+            path: entry.uri,
         });
-        console.log("Default folder exists.");
-    } catch (error) {
+
+        console.log(fileUri);
+
+        PreviewAnyFile.preview(fileUri.uri)
+            .then((res) => console.log(res))
+            .catch((error) => console.error(error));
+    } else {
+        // Browser fallback to download the file
+        const file = await Filesystem.readFile({
+            directory: Global.APP_DIRECTORY,
+            path: entry.uri,
+        });
+
         const alert = await alertController.create({
-            header: "Choose root folder",
-            message: `No default folder found. Default folder will be created in: <i>${Global.APP_DIRECTORY}/${Global.ROOT_FOLDER}</i>.<br/>
-                                If you want to modify your collections, you can do it in the built-in File Explorer or through your smartphone's preferred File Explorer app.`,
+            message: `<img src="data:;base64,${file.data}"; />`,
             buttons: [
                 {
-                    text: "OK",
+                    text: "Download",
+                    handler: () => {
+                        const a = document.createElement("a");
+                        document.body.appendChild(a);
+                        a.setAttribute("style", "display: none");
+                        a.href = "data:;base64," + file.data;
+                        a.download = entry.name;
+                        a.click();
+                        a.remove();
+                    },
+                },
+                {
+                    text: "Delete",
+                    handler: () => {
+                        deleteDocument(entry);
+                    },
+                },
+                {
+                    text: "Cancel",
                     role: "cancel",
                 },
             ],
         });
+
         await alert.present();
-        // Create default
-        await mkdirHelper(`${Global.ROOT_FOLDER}`);
-        console.log(`Default folder created: ${Global.ROOT_FOLDER}`);
     }
-}
+};
+
+/**
+ * Function triggered on item click, both files and folders.
+ * If there is an ongoing copu process uses the last clicked folder as the new path for the file (calling finishCopyFile(). If a file is clicked, an error message will be shown.
+ * If not, it will just open the file (calling openFile()) or folder (router push).
+ * @param {File} entry File clicked
+ * @returns {null}
+ */
+const itemClicked = async (entry) => {
+    if (data.copyFile) {
+        // We can only copy to a folder
+        if (entry.isFile) {
+            const toast = await toastController.create({
+                message: "Select a folder for the operation",
+                duration: 2000,
+                position: "top",
+            });
+
+            await toast.present();
+            return;
+        }
+        // Finish the ongoing operation
+        finishCopyFile(entry);
+    } else {
+        // Open the file or folder
+        if (entry.isFile) {
+            openFile(entry);
+        } else {
+            let pathToOpen;
+            if (props.currentFolder != "") {
+                pathToOpen = props.currentFolder + "/" + entry.name;
+            } else {
+                pathToOpen = entry.name;
+            }
+            const folder = encodeURIComponent(pathToOpen);
+
+            router.push(`/tabs/tab2/${folder}`);
+
+            return;
+        }
+    }
+};
 
 watch(data, () => {
     loadDocuments();
