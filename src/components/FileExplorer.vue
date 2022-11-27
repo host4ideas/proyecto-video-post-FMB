@@ -418,10 +418,8 @@ const openFile = async (entry) => {
         // Get the URI and use our Cordova plugin for preview
         const fileUri = await Filesystem.getUri({
             directory: Global.APP_DIRECTORY,
-            path: entry.uri,
+            path: props.currentFolder + "/" + entry.name,
         });
-
-        console.log(fileUri);
 
         PreviewAnyFile.preview(fileUri.uri)
             .then((res) => console.log(res))
